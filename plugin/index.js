@@ -2,12 +2,13 @@
 const { SerialPort } = require('serialport');
 const { ReadlineParser } = require('@serialport/parser-readline');
 
-
+const openapi = require('./../openApi.json');
 
 
 module.exports = function(app) {
   let plugin = {};
   let serialPort;
+  
 
   plugin.id = 'my-serial-ais-plugin';
   plugin.name = 'Serial AIS Plugin';
@@ -15,42 +16,7 @@ module.exports = function(app) {
 
   plugin.start = function(options, restartPlugin) {
 
-    function sendCommand(command) {
-      if (serialPort && serialPort.isOpen) {
-        serialPort.write(command + '\r\n', (err) => {
-          if (err) {
-            app.error('Error on write: ', err.message);
-          } else {
-            app.debug(`Command sent: ${command}`);
-          }
-        });
-      } else {
-        app.error('Serial port is not open');
-      }
-    }
-
-    function sendAuthorization() {
-      const authorizationCommand = '$PSRT,012,(--QuaRk--)*4B';
-      sendCommand(authorizationCommand);
-    }
     
-    function enableSilentMode() {
-      sendAuthorization();
-      // Delay to ensure authorization command is processed before sending the next command
-      setTimeout(() => {
-        sendCommand('$PSRT,TRG,0233*6A');
-      }, 500); // Adjust delay as needed
-    }
-    
-    function disableSilentMode() {
-      sendAuthorization();
-      // Delay to ensure authorization command is processed before sending the next command
-      setTimeout(() => {
-        sendCommand('$PSRT,TRG,0200*6A');
-      }, 500); // Adjust delay as needed
-    }
-    
-
     app.debug('Plugin started');
     if (!options.serialPort) {
       app.error('Serial port not defined in plugin configuration');
@@ -60,7 +26,7 @@ module.exports = function(app) {
     // Open serial port
    // serialPort = new SerialPort(options.serialPort, { baudRate: options.baudRate });
 
-    const serialPort = new SerialPort({
+    serialPort = new SerialPort({
       path:options.serialPort,
       baudRate: options.baudRate,
     
@@ -72,7 +38,7 @@ module.exports = function(app) {
 
 
      parser.on('data', (line) => {
-       app.debug(`Received line: ${line}`);
+      // app.debug(`Received line: ${line}`);
        // Process the line here
        processReceivedLine(line);
      });
@@ -80,6 +46,7 @@ module.exports = function(app) {
 
       function processReceivedLine(line) {
         if (line.startsWith('$PSRT,LED')) {
+          app.debug(`Received line: ${line}`);
           const ledStatus = parseLEDStatus(line);
           app.debug(`LED Status: ${JSON.stringify(ledStatus)}`);
           // You can now use ledStatus.powerOn, ledStatus.txTimeout, etc.
@@ -141,15 +108,74 @@ module.exports = function(app) {
       setInterval(() => {
         sendCommand('$DUAIQ,LED*29');
       }, 5000);
+      //enableSilentMode();
     });
   };
 
   plugin.stop = function() {
     app.debug('Plugin stopped');
-    if (serialPort) {
+    if (serialPort && serialPort.isOpen) {
       serialPort.close();
     }
   };
+
+  function sendCommand(command) {
+    if (serialPort) {
+      if (serialPort.isOpen) {
+        serialPort.write(command + '\r\n', (err) => {
+          if (err) {
+            app.error('Error on write: ', err.message);
+          } else {
+            app.debug(`Command sent: ${command}`);
+          }
+        });
+      } else {
+        app.debug('Attempting to write, but serial port is not open');
+      }
+    } else {
+      app.error('Serial port object is not defined');
+    }
+  }
+
+  function sendAuthorization() {
+    const authorizationCommand = '$PSRT,012,(--QuaRk--)*4B';
+    sendCommand(authorizationCommand);
+  }
+  
+  function enableSilentMode() {
+    sendAuthorization();
+    // Delay to ensure authorization command is processed before sending the next command
+    setTimeout(() => {
+      sendCommand('$PSRT,TRG,0233*6A');
+    }, 500); // Adjust delay as needed
+  }
+  
+  function disableSilentMode() {
+    sendAuthorization();
+    // Delay to ensure authorization command is processed before sending the next command
+    setTimeout(() => {
+      sendCommand('$PSRT,TRG,0200*6A');
+    }, 500); // Adjust delay as needed
+  }
+  
+
+  plugin.registerWithRouter = function(router) {
+    router.put('/silentMode/:state', (req, res) => {
+      app.debug('router called...');
+      const state = req.params.state;
+      if (state === 'on') {
+        enableSilentMode();
+        res.send('Silent mode enabled');
+      } else if (state === 'off') {
+        disableSilentMode();
+        res.send('Silent mode disabled');
+      } else {
+        res.status(400).send('Invalid state. Use "on" or "off".');
+      }
+    });
+  };
+  plugin.getOpenApi = () => openapi;
+
 
   plugin.schema = function() {
     return {

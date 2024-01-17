@@ -1,0 +1,39 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+      "version": "0.0.1",
+      "title": "Signal K AIS control API",
+      "license": {
+        "name": "Apache 2.0",
+        "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+      }
+    },
+    "paths": {
+      "/my-serial-ais-plugin/silentMode/on": {
+        "put": {
+          "tags": [],
+          "description": "Turn silent mode on in the AIS transponter",
+          "responses": {
+            "200": {
+              "properties": {
+                "message": "string"
+              }
+            }
+          }
+        }
+      },
+      "/my-serial-ais-plugin/silentMode/off": {
+        "put": {
+          "tags": [],
+          "description": "Turn silent mode off in the AIS transponter",
+          "responses": {
+            "200": {
+              "properties": {
+                "message": "string"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
